@@ -1,82 +1,87 @@
 package v1
 
-import java.util.*
-import java.util.function.Function
 
-class RailwayHandler<T> // Private constructor for internal success/failure creation
-private constructor(// Internal data structure to hold the value or error
-    val value: T, val error: Throwable?
+
+import io.github.oshai.kotlinlogging.KotlinLogging
+
+class RailwayHandler<T> private constructor(
+    val value: T?,
+    val error: Throwable?
 ) {
-    // List of steps to build the pipeline
-    private val steps: MutableList<Function<T, RailwayHandler<T>>> = LinkedList()
-
+    private val log = KotlinLogging.logger {}
+    private val steps: MutableList<(T) -> RailwayHandler<T>> = mutableListOf()
 
     val isSuccess: Boolean
-        // Check whether the operation was successful
         get() = error == null
 
-    // Add step to the pipeline
-    fun addStep(step: Function<T, RailwayHandler<T>>): RailwayHandler<T> {
+    fun addStep(step: (T) -> RailwayHandler<T>): RailwayHandler<T> {
+        log.info { "Adding step: $step" }
         steps.add(step)
         return this
     }
 
-    // Execute all steps in the pipeline
     fun execute(): RailwayHandler<T> {
+        log.info { "Executing pipeline with initial value: $value" }
         var current = this
         for (step in steps) {
             if (current.isSuccess) {
                 try {
-                    current = step.apply(current.value)
+                    current = current.value?.let { step(it) } ?: return failure(IllegalStateException("Value is null"))
+                    log.info { "Step executed successfully, current value: ${current.value}" }
                 } catch (e: Throwable) {
+                    log.error(e) { "Step execution failed" }
                     return failure(e)
                 }
+            } else {
+                log.warn { "Short-circuiting on error: ${current.error?.message}" }
+                return current
             }
-            return current // Short-circuit on error
         }
+        log.info { "Pipeline execution completed with final value: ${current.value}" }
         return current
     }
 
-
-    // Function to add more transformations in a composable manner (remains of type A)
-    fun <R> flatMap(mapper: Function<T, RailwayHandler<R>?>): RailwayHandler<R>? {
-        if (isSuccess) {
-            return try {
-                mapper.apply(value)
+    fun <R> flatMap(mapper: (T) -> RailwayHandler<R>?): RailwayHandler<R>? {
+        return if (isSuccess) {
+            try {
+                log.info { "FlatMapping value: $value" }
+                value?.let { mapper(it) }
             } catch (e: Throwable) {
+                log.error(e) { "FlatMapping failed" }
                 failure(e)
             }
+        } else {
+            log.warn { "FlatMapping skipped due to error: ${error?.message}" }
+            failure(error)
         }
-        return failure(error)
     }
 
-    // Function for mapping the type A to a different type B without affecting the railway flow
-    fun <B> map(mapper: Function<T, B>): RailwayHandler<B> {
-        if (isSuccess) {
-            return try {
-                success(mapper.apply(value))
+    fun <B> map(mapper: (T) -> B): RailwayHandler<B> {
+        return if (isSuccess) {
+            try {
+                log.info { "Mapping value: $value" }
+                success(value?.let(mapper) ?: throw IllegalStateException("Value is null"))
             } catch (e: Throwable) {
+                log.error(e) { "Mapping failed" }
                 failure(e)
             }
+        } else {
+            log.warn { "Mapping skipped due to error: ${error?.message}" }
+            failure(error)
         }
-        return failure(error)
     }
-
 
     companion object {
-        // Example of how to create a new builder that can be initialized
         fun <T> start(value: T): RailwayHandler<T> {
             return success(value)
         }
 
-        // Static methods for success and failure creation
         fun <T> success(value: T): RailwayHandler<T> {
             return RailwayHandler(value, null)
         }
 
-        fun <T> failure(error: Throwable?): RailwayHandler<T?> {
+        fun <T> failure(error: Throwable?): RailwayHandler<T> {
             return RailwayHandler(null, error)
         }
     }
 }
-
