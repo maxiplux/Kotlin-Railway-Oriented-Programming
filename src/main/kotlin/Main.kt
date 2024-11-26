@@ -38,10 +38,10 @@ fun main() {
     val userService: UserService = UserService()
 
     val result2: RailwayHandler<UserDTO>? = userService.createUser(UserDTO("John Doe", "demo@demo.com"))
-    if (result2?.isSuccess!!) {
+    if (result2?.isSuccess == true) {
         println("User created successfully: ${result2.value}")
     } else {
-        println("User creation failed: ${result2.error?.message}")
+        println("User creation failed: ${result2?.error?.message}")
     }
 
 
