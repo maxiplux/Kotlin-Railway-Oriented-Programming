@@ -18,7 +18,7 @@ class UserService {
             when {
                 userDTO == null -> RailwayHandler.failure(IllegalArgumentException("UserDTO cannot be null"))
                 userDTO.name.isEmpty() -> RailwayHandler.failure(IllegalArgumentException("Name cannot be null or empty"))
-                !userDTO.emai.contains("@") -> RailwayHandler.failure(IllegalArgumentException("Invalid email address"))
+                !userDTO.email.contains("@") -> RailwayHandler.failure(IllegalArgumentException("Invalid email address"))
                 else -> RailwayHandler.success(userDTO)
             }
         }
@@ -33,7 +33,7 @@ class UserService {
     // Step 2: Map DTO to Entity
     private fun mapToEntity(userDTO: UserDTO?): RailwayHandler<User?> {
         return try {
-            val user = User(null, userDTO!!.name, userDTO.emai)
+            val user = User(null, userDTO!!.name, userDTO.email)
             RailwayHandler.success(user)
         } catch (e: Exception) {
             RailwayHandler.failure(e)
@@ -43,8 +43,12 @@ class UserService {
     // Step 3: Save Entity to Database
     private fun saveEntity(user: User?): RailwayHandler<User?> {
         return try {
-            val savedUser = userRepository.save(user)
-            RailwayHandler.success(savedUser)
+            if (user == null) {
+                RailwayHandler.failure(IllegalArgumentException("User cannot be null"))
+            } else {
+                val savedUser = userRepository.save(user)
+                RailwayHandler.success(savedUser)
+            }
         } catch (e: Exception) {
             RailwayHandler.failure(e)
         }
